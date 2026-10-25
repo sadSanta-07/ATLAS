@@ -12,31 +12,35 @@ export function ComparisonTable({ results, activeKey, onSelect }: Props) {
   if (keys.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-neutral-800">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
+    <div className="overflow-x-auto rounded-2xl border border-[#e9e8f2] bg-white/70">
+      <table className="w-full min-w-[500px] text-left text-xs">
+        <thead className="bg-[#f0eeff] text-[9px] font-semibold uppercase tracking-[0.13em] text-[#77786e]">
           <tr>
-            <th className="px-4 py-2">Run</th>
-            <th className="px-4 py-2">Changed %</th>
-            <th className="px-4 py-2">Regions</th>
-            <th className="px-4 py-2">Runtime</th>
+            <th className="px-4 py-3.5">Run</th>
+            <th className="px-4 py-3.5">Changed %</th>
+            <th className="px-4 py-3.5">Regions</th>
+            <th className="px-4 py-3.5">Runtime</th>
           </tr>
         </thead>
         <tbody>
-          {keys.map((key) => {
+          {keys.map((key, index) => {
             const r = results[key];
+            const active = activeKey === key;
             return (
               <tr
                 key={key}
                 onClick={() => onSelect(key)}
-                className={`cursor-pointer border-t border-neutral-800 transition hover:bg-neutral-900 ${
-                  activeKey === key ? "bg-cyan-400/10" : ""
-                }`}
+                aria-selected={active}
+                className={`cursor-pointer border-t border-[#e9e9e1] transition-colors hover:bg-[#f5f7ed] ${active ? "bg-[#eeebff]" : "bg-transparent"}`}
               >
-                <td className="px-4 py-2 font-medium">{PRESET_LABELS[key] ?? "Custom settings"}</td>
-                <td className="px-4 py-2 tabular-nums">{r.changed_percent.toFixed(2)}</td>
-                <td className="px-4 py-2 tabular-nums">{r.region_count}</td>
-                <td className="px-4 py-2 tabular-nums">{r.runtime_ms.toFixed(0)} ms</td>
+                <td className="px-4 py-3.5 font-medium text-[#303127]">
+                  <span className={`mr-2 inline-flex h-5 w-5 items-center justify-center rounded-md font-mono text-[9px] ${active ? "bg-[#dcd5ff] text-[#58682b]" : "bg-[#f0eeff] text-[#777583]"}`}>{String(index + 1).padStart(2, "0")}</span>
+                  {PRESET_LABELS[key] ?? "Custom settings"}
+                  {active && <span className="ml-2 text-[9px] font-semibold uppercase tracking-wider text-[#7565d8]">Active</span>}
+                </td>
+                <td className="px-4 py-3.5 font-mono tabular-nums text-[#4b4c42]">{r.changed_percent.toFixed(2)}%</td>
+                <td className="px-4 py-3.5 font-mono tabular-nums text-[#4b4c42]">{r.region_count}</td>
+                <td className="px-4 py-3.5 font-mono tabular-nums text-[#4b4c42]">{r.runtime_ms.toFixed(0)} ms</td>
               </tr>
             );
           })}
