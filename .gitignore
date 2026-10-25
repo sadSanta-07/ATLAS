@@ -9,5 +9,6 @@ __pycache__/
 .env.local
 data/
 outputs/
+outputs_v2/
 .vercel/
 "@ | Set-Content .gitignore
