@@ -1,31 +1,5 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
-const poppins = localFont({
-  src: "../components/fonts/Poppins-Regular.woff2",
-  variable: "--font-poppins",
-  display: "swap",
-  weight: "400",
-});
-
-const instrumentSerif = localFont({
-  src: "../components/fonts/InstrumentSerif-Regular.ttf",
-  variable: "--font-instrument-serif",
-  display: "swap",
-  weight: "400",
-});
-
-const specialGothic = localFont({
-  src: "../components/fonts/SpecialGothicExpandedOne-Regular.woff2",
-  variable: "--font-special-gothic",
-  display: "swap",
-  weight: "400",
-});
 
 export const metadata: Metadata = {
   title: "ATLAS — Temporal Change Intelligence",
@@ -37,11 +11,31 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      className={cn("h-full", "antialiased", poppins.variable, instrumentSerif.variable, specialGothic.variable, "font-sans", geist.variable)}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const queryTheme = new URLSearchParams(window.location.search).get("theme");
+                const savedTheme = localStorage.getItem("theme");
+                const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                const theme = queryTheme === "light" || queryTheme === "dark" ? queryTheme : (savedTheme || preferredTheme);
+                document.documentElement.dataset.theme = theme;
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col font-sans antialiased">
+        {children}
+      </body>
     </html>
   );
 }

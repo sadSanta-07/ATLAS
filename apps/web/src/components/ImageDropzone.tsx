@@ -41,12 +41,12 @@ export function ImageDropzone({ label, hint, file, previewUrl, onFile }: Props) 
         setDragging(false);
         accept(e.dataTransfer.files[0]);
       }}
-      className={`group relative flex aspect-[4/3] cursor-pointer items-center justify-center overflow-hidden rounded-2xl border transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8574e8] focus-visible:ring-offset-2 focus-visible:ring-offset-[#faf9ff] ${
+      className={`group relative flex aspect-[4/3] cursor-pointer items-center justify-center overflow-hidden rounded-xl border transition-all duration-200 focus:outline-none ${
         dragging
-          ? "border-[#7565d8] bg-[#eeebff] ring-2 ring-[#dcd5ff]"
+          ? "border-[var(--accent)] bg-[var(--surface-hover)] ring-2 ring-[var(--accent)]/30"
           : previewUrl
-            ? "border-[#e2e0ef] bg-[#f3f1ff]"
-            : "border-dashed border-[#dedaf5] bg-white/80 hover:border-[#a99aff] hover:bg-[#fbfcf5]"
+            ? "border-[var(--line-strong)] bg-[var(--paper-deep)]"
+            : "border-dashed border-[var(--line-strong)] bg-[var(--surface)] hover:border-[var(--accent)] hover:bg-[var(--surface-hover)]"
       }`}
     >
       <input
@@ -61,27 +61,41 @@ export function ImageDropzone({ label, hint, file, previewUrl, onFile }: Props) 
       />
       {previewUrl ? (
         <>
-          <img src={previewUrl} alt={label} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-[#20211b]/85 px-2.5 py-2 text-[10px] text-white backdrop-blur">
-            <span className="min-w-0 truncate">{file?.name}</span>
+          <img
+            src={previewUrl}
+            alt={label}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-[var(--line-strong)] bg-[var(--ink)]/90 px-3 py-2 text-[10px] text-[var(--paper)] backdrop-blur">
+            <span className="min-w-0 truncate font-mono text-[10px] tracking-tight">
+              {file?.name}
+            </span>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onFile(null);
               }}
-              className="shrink-0 rounded-full border border-white/25 px-2 py-1 text-[9px] font-medium transition hover:border-white hover:bg-white/15"
+              className="shrink-0 rounded-full border border-[var(--paper)]/30 px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-[var(--paper)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)] hover:text-white"
             >
               Remove
             </button>
           </div>
         </>
       ) : (
-        <div className="flex flex-col items-center px-2 text-center">
-          <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-[#edf0ff] text-lg text-[#7565d8] transition group-hover:bg-[#e2ddff]">＋</span>
-          <span className="text-xs font-semibold text-[#303127]">{label}</span>
-          <span className="mt-1 text-[10px] text-[#777583]">{hint}</span>
-          <span className="mt-3 text-[9px] text-[#9a97ae]">Browse or drop</span>
+        <div className="flex flex-col items-center px-3 text-center">
+          <span className="mb-2.5 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--line-strong)] bg-[var(--surface)] font-mono text-sm text-[var(--accent)] transition-transform duration-200 group-hover:scale-110 group-hover:border-[var(--accent)]">
+            +
+          </span>
+          <span className="text-xs font-semibold tracking-tight text-[var(--ink)]">
+            {label}
+          </span>
+          <span className="mt-0.5 text-[10px] text-[var(--ink-soft)]">
+            {hint}
+          </span>
+          <span className="mt-2 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--accent)] opacity-80 group-hover:opacity-100">
+            Click or drop file
+          </span>
         </div>
       )}
     </div>

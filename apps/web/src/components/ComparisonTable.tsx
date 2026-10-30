@@ -12,14 +12,14 @@ export function ComparisonTable({ results, activeKey, onSelect }: Props) {
   if (keys.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[#e9e8f2] bg-white/70">
+    <div className="overflow-x-auto rounded-xl border border-[var(--line-strong)] bg-[var(--surface-card)]">
       <table className="w-full min-w-[500px] text-left text-xs">
-        <thead className="bg-[#f0eeff] text-[9px] font-semibold uppercase tracking-[0.13em] text-[#77786e]">
+        <thead className="border-b border-[var(--line-strong)] bg-[var(--paper-deep)] text-[10px] text-[var(--ink-soft)] mono">
           <tr>
-            <th className="px-4 py-3.5">Run</th>
-            <th className="px-4 py-3.5">Changed %</th>
-            <th className="px-4 py-3.5">Regions</th>
-            <th className="px-4 py-3.5">Runtime</th>
+            <th className="px-4 py-3">01 / Method Run</th>
+            <th className="px-4 py-3">Changed %</th>
+            <th className="px-4 py-3">Regions</th>
+            <th className="px-4 py-3">Runtime</th>
           </tr>
         </thead>
         <tbody>
@@ -31,16 +31,40 @@ export function ComparisonTable({ results, activeKey, onSelect }: Props) {
                 key={key}
                 onClick={() => onSelect(key)}
                 aria-selected={active}
-                className={`cursor-pointer border-t border-[#e9e9e1] transition-colors hover:bg-[#f5f7ed] ${active ? "bg-[#eeebff]" : "bg-transparent"}`}
+                className={`cursor-pointer border-t border-[var(--line)] transition-colors ${
+                  active
+                    ? "bg-[var(--surface-hover)]"
+                    : "hover:bg-[var(--surface)]"
+                }`}
               >
-                <td className="px-4 py-3.5 font-medium text-[#303127]">
-                  <span className={`mr-2 inline-flex h-5 w-5 items-center justify-center rounded-md font-mono text-[9px] ${active ? "bg-[#dcd5ff] text-[#58682b]" : "bg-[#f0eeff] text-[#777583]"}`}>{String(index + 1).padStart(2, "0")}</span>
-                  {PRESET_LABELS[key] ?? "Custom settings"}
-                  {active && <span className="ml-2 text-[9px] font-semibold uppercase tracking-wider text-[#7565d8]">Active</span>}
+                <td className="px-4 py-3.5 font-medium text-[var(--ink)]">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`inline-flex h-5 w-5 items-center justify-center rounded font-mono text-[9px] border ${
+                        active
+                          ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                          : "border-[var(--line)] bg-[var(--paper-deep)] text-[var(--ink-soft)]"
+                      }`}
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span>{PRESET_LABELS[key] ?? "Custom Parameter Profile"}</span>
+                    {active && (
+                      <span className="mono rounded border border-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 text-[9px] text-[var(--accent)] font-semibold">
+                        ACTIVE
+                      </span>
+                    )}
+                  </div>
                 </td>
-                <td className="px-4 py-3.5 font-mono tabular-nums text-[#4b4c42]">{r.changed_percent.toFixed(2)}%</td>
-                <td className="px-4 py-3.5 font-mono tabular-nums text-[#4b4c42]">{r.region_count}</td>
-                <td className="px-4 py-3.5 font-mono tabular-nums text-[#4b4c42]">{r.runtime_ms.toFixed(0)} ms</td>
+                <td className="px-4 py-3.5 font-mono tabular-nums text-[var(--ink)] font-medium">
+                  {r.changed_percent.toFixed(2)}%
+                </td>
+                <td className="px-4 py-3.5 font-mono tabular-nums text-[var(--ink-soft)]">
+                  {r.region_count}
+                </td>
+                <td className="px-4 py-3.5 font-mono tabular-nums text-[var(--ink-soft)]">
+                  {r.runtime_ms.toFixed(0)} ms
+                </td>
               </tr>
             );
           })}

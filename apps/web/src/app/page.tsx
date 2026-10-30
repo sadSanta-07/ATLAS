@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { ComparisonTable } from "@/components/ComparisonTable";
@@ -12,7 +12,6 @@ import { analyze } from "@/lib/api";
 import { DEFAULT_PARAMS, PRESETS } from "@/lib/presets";
 import type { AnalysisResponse, DetectionParams } from "@/lib/types";
 import { useObjectUrl } from "@/lib/useObjectUrl";
-import Image from "next/image";
 
 type ViewKey = "a" | "b" | "overlay" | "heatmap" | "mask" | "aligned";
 
@@ -25,30 +24,33 @@ const VIEW_LABELS: Record<ViewKey, string> = {
   aligned: "B after alignment",
 };
 
-
-function Mark({ className = "" }: { className?: string }) {
+function MonogramMark() {
   return (
     <span
-      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#e5e0ff] ${className}`}
+      className="monogram"
+      aria-hidden="true"
     >
-      <Image
-        src="/logo.jpg"
-        alt="ATLAS logo"
-        width={36}
-        height={36}
-        className="h-full w-full object-contain"
-      />
+      <span className="font-editorial text-[1.25rem] text-[var(--accent)] font-semibold select-none">
+        Δ
+      </span>
     </span>
   );
 }
 
-
-function SectionLabel({ number, children }: { number: string; children: ReactNode }) {
+function SectionLabel({
+  number,
+  children,
+}: {
+  number: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="mb-4 flex items-center gap-3">
-      <span className="font-mono text-[10px] tracking-[0.18em] text-[#77786e]">{number}</span>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#77786e]">{children}</span>
-      <span className="h-px flex-1 bg-[#e9e8f2]" />
+    <div className="mb-3.5 flex items-center gap-2.5">
+      <span className="mono text-[var(--accent)] font-semibold">{number}</span>
+      <span className="mono text-[var(--ink-soft)] tracking-[0.14em]">
+        {children}
+      </span>
+      <span className="h-px flex-1 bg-[var(--line)]" />
     </div>
   );
 }
@@ -67,6 +69,37 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [leftView, setLeftView] = useState<ViewKey>("a");
   const [rightView, setRightView] = useState<ViewKey>("overlay");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const syncTheme = () => {
+      const current =
+        (document.documentElement.dataset.theme as "light" | "dark") || "light";
+      setTheme(current);
+    };
+
+    const observer = new MutationObserver(() => syncTheme());
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    // Initial check from attribute if set
+    if (document.documentElement.dataset.theme) {
+      syncTheme();
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    try {
+      localStorage.setItem("theme", nextTheme);
+    } catch {}
+  };
 
   const result = activeKey ? results[activeKey] : null;
 
@@ -76,10 +109,11 @@ export default function Home() {
     setError(null);
   };
 
-  const handleFile = (setter: (f: File | null) => void) => (file: File | null) => {
-    setter(file);
-    resetResults();
-  };
+  const handleFile =
+    (setter: (f: File | null) => void) => (file: File | null) => {
+      setter(file);
+      resetResults();
+    };
 
   const applyPreset = (id: string) => {
     const preset = PRESETS.find((p) => p.id === id);
@@ -93,9 +127,12 @@ export default function Home() {
     setActivePreset(null);
   };
 
-  const run = async (jobs: { key: string; params: DetectionParams }[], focusKey: string) => {
+  const run = async (
+    jobs: { key: string; params: DetectionParams }[],
+    focusKey: string,
+  ) => {
     if (!fileA || !fileB) {
-      setError("Upload both images first.");
+      setError("Upload both earlier (Image A) and later (Image B) images first.");
       return;
     }
     setLoading(true);
@@ -113,12 +150,15 @@ export default function Home() {
     }
   };
 
-  const runCurrent = () => run([{ key: activePreset ?? "custom", params }], activePreset ?? "custom");
+  const runCurrent = () =>
+    run([{ key: activePreset ?? "custom", params }], activePreset ?? "custom");
+
   const runAll = () =>
     run(
       PRESETS.map((p) => ({ key: p.id, params: p.params })),
       PRESETS[0]?.id ?? "custom",
     );
+
   const sourceFor = (view: ViewKey): string | null => {
     switch (view) {
       case "a":
@@ -138,12 +178,17 @@ export default function Home() {
 
   const downloadJson = () => {
     const slim = Object.fromEntries(
-      Object.entries(results).map(([k, r]) => [k, { ...r, images: undefined }]),
+      Object.entries(results).map(([k, r]) => [
+        k,
+        { ...r, images: undefined },
+      ]),
     );
-    const blob = new Blob([JSON.stringify(slim, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(slim, null, 2)], {
+      type: "application/json",
+    });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "atlas-results.json";
+    link.download = "atlas-change-report.json";
     link.click();
     URL.revokeObjectURL(link.href);
   };
@@ -151,323 +196,753 @@ export default function Home() {
   const ready = Boolean(fileA && fileB);
 
   return (
-    <div className="atlas-shell min-h-screen text-[#20211b]">
-      <div className="pointer-events-none fixed inset-0 -z-10 opacity-40" aria-hidden="true">
-        <div className="atlas-grid absolute inset-0" />
-      </div>
-
-      <header className="sticky top-0 z-30 border-b border-[#e9e8f2]/90 bg-[#faf9ff]/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 py-3.5 sm:px-8 lg:px-12">
-          <a href="#" className="flex items-center gap-3" aria-label="ATLAS home">
-            <Mark />
+    <div className="min-h-screen text-[var(--ink)]">
+      {/* ─── SITE HEADER ────────────────────────────────────────── */}
+      <header className="site-header sticky top-0 z-40">
+        <div className="shell flex min-h-[5.5rem] items-center justify-between gap-4">
+          <a
+            href="#top"
+            className="flex items-center gap-3.5 text-decoration-none group"
+            aria-label="ATLAS home"
+          >
+            <MonogramMark />
             <div>
-              <div className="text-[15px] font-bold tracking-[-0.04em]">ATLAS<span className="text-[#7565d8]">.</span></div>
-              <div className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-[#77786e]">Temporal intelligence</div>
+              <div className="font-editorial text-xl font-medium tracking-tight text-[var(--ink)]">
+                ATLAS
+                <span className="text-[var(--accent)] font-serif italic ml-0.5">.</span>
+              </div>
+              <div className="mono text-[9px] text-[var(--ink-soft)]">
+                Temporal intelligence
+              </div>
             </div>
           </a>
-          <div className="hidden items-center gap-7 text-xs text-[#77786e] md:flex">
-            <a href="#workspace" className="transition hover:text-[#20211b]">Workspace</a>
-            <a href="#method" className="transition hover:text-[#20211b]">Methodology</a>
-            <span className="flex items-center gap-2 rounded-full border border-[#e9e8f2] bg-white/60 px-3 py-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#8574e8]" />
-              Local analysis engine
+
+          <nav
+            className="hidden items-center gap-8 text-xs font-medium text-[var(--ink-soft)] md:flex"
+            aria-label="Primary navigation"
+          >
+            <a
+              href="#workspace"
+              className="transition-colors hover:text-[var(--ink)] hover:underline"
+            >
+              Workspace
+            </a>
+            <a
+              href="#presets"
+              className="transition-colors hover:text-[var(--ink)] hover:underline"
+            >
+              Profiles
+            </a>
+            <a
+              href="#method"
+              className="transition-colors hover:text-[var(--ink)] hover:underline"
+            >
+              Methodology
+            </a>
+            <span className="flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-1 font-mono text-[10px] text-[var(--ink-soft)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+              Engine Online
             </span>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <a
+              href="http://127.0.0.1:8000/docs"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-3.5 py-1.5 font-mono text-[11px] text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)]"
+            >
+              <span>API docs</span>
+              <span className="text-[var(--accent)]">↗</span>
+            </a>
+
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Switch color theme"
+              className="theme-toggle"
+            >
+              {/* Sun icon */}
+              <svg
+                className="theme-icon theme-icon--sun"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" />
+              </svg>
+              {/* Moon icon */}
+              <svg
+                className="theme-icon theme-icon--moon"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.5 8.5 0 1 0 20.2 15.1Z" />
+              </svg>
+              <span className="sr-only">Switch theme</span>
+            </button>
           </div>
-          <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-[#e2e0ef] bg-white px-4 py-2 text-xs font-semibold transition hover:border-[#a99aff] hover:bg-[#f6f5ff]">
-            API docs
-          </a>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1440px] px-5 pb-16 sm:px-8 lg:px-12">
-        <section className="relative grid gap-8 border-b border-[#e9e8f2] py-12 sm:py-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:gap-12 lg:py-20">
-          <div className="absolute right-0 top-12 hidden h-24 w-24 rounded-full border border-[#e9e8f2] lg:block" aria-hidden="true">
-            <div className="absolute inset-3 rounded-full border border-dashed border-[#dedaf5]" />
-            <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#a99aff]" />
-          </div>
-          <div>
-            <h1 className="max-w-3xl text-[clamp(3rem,7.5vw,6.8rem)] font-semibold leading-[0.91] tracking-[-0.085em]">
-              See what<br />time <span className="font-serif font-normal italic text-[#7565d8]">changed.</span>
-            </h1>
-            <p className="mt-7 max-w-xl text-sm leading-7 text-[#66675e] sm:text-base">
-              Compare two moments in one place. ATLAS aligns imagery, accounts for lighting, and maps the differences that matter.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3 text-[11px] text-[#77786e]">
-              <span className="rounded-full bg-[#edf0ff] px-3 py-1.5">PIXEL DIFFERENCE</span>
-              <span className="rounded-full bg-[#edf0ff] px-3 py-1.5">STRUCTURAL SIMILARITY</span>
-              <span className="rounded-full bg-[#edf0ff] px-3 py-1.5">HYBRID DETECTION</span>
-            </div>
-          </div>
-          <div className="relative overflow-hidden rounded-[1.75rem] border border-[#e9e8f2] bg-[#f3f1ff] p-6 sm:p-8">
-            <div className="absolute -right-12 -top-16 h-52 w-52 rounded-full border border-[#dedaf5]" />
-            <div className="absolute -right-3 -top-7 h-36 w-36 rounded-full border border-[#dedaf5]" />
-            <div className="relative flex items-start justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#77786e]">The workflow</p>
-                <p className="mt-2 text-xl font-medium tracking-[-0.04em] sm:text-2xl">From two images<br />to a clear signal.</p>
+      <main id="main">
+        {/* ─── HERO SECTION ─────────────────────────────────────── */}
+        <section
+          id="top"
+          className="shell relative border-b border-[var(--line)] py-14 lg:py-24"
+          aria-labelledby="hero-title"
+        >
+          <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+            <div className="relative z-10 min-w-0">
+              <p className="eyebrow">
+                01 / Temporal Analysis Engine · CV &amp; SSIM
+              </p>
+              <h1
+                id="hero-title"
+                className="font-editorial text-[clamp(3.4rem,7.5vw,6.4rem)] leading-[0.92] tracking-[-0.045em] text-[var(--ink)]"
+              >
+                See what <br />
+                time <em>changed.</em>
+              </h1>
+              <p className="mt-7 max-w-xl text-base leading-relaxed text-[var(--ink-soft)] sm:text-lg">
+                Compare two moments in one place. ATLAS aligns imagery across
+                viewpoint shifts, accounts for lighting disparity, and maps the
+                structural differences that matter.
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-6">
+                <a className="text-link" href="#workspace">
+                  Explore workspace <span>↘</span>
+                </a>
+                <a
+                  className="text-link quiet"
+                  href="http://127.0.0.1:8000/docs"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  API specification <span>↗</span>
+                </a>
               </div>
-              <span className="font-mono text-xs text-[#77786e]">01—04</span>
+
+              <div className="mt-10 flex flex-wrap items-center gap-2.5">
+                {[
+                  "PIXEL DIFFERENCE",
+                  "STRUCTURAL SIMILARITY",
+                  "ORB HOMOGRAPHY",
+                  "HYBRID DELTA",
+                ].map((tag, idx) => (
+                  <span
+                    key={tag}
+                    className="mono rounded-full border border-[var(--line)] bg-[var(--surface)] px-3 py-1 text-[10px] text-[var(--ink-soft)]"
+                  >
+                    0{idx + 1} · {tag}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="relative mt-8 space-y-3">
-              {[
-                ["01", "Align", "Correct camera movement"],
-                ["02", "Normalize", "Reduce lighting differences"],
-                ["03", "Compare", "Evaluate pixel and structure"],
-                ["04", "Localize", "Map changed regions"],
-              ].map(([n, title, copy]) => (
-                <div key={n} className="flex items-center gap-4 border-t border-[#e5e2f2] py-3">
-                  <span className="font-mono text-[10px] text-[#7565d8]">{n}</span>
-                  <span className="w-24 text-sm font-semibold">{title}</span>
-                  <span className="text-xs text-[#77786e]">{copy}</span>
-                </div>
-              ))}
+
+            {/* Bespoke Celestial & Optical Alignment Graphic */}
+            <div
+              className="relative flex items-center justify-center lg:justify-end"
+              aria-hidden="true"
+            >
+              <div className="relative w-full max-w-[34rem]">
+                <svg
+                  viewBox="0 0 620 590"
+                  role="presentation"
+                  className="w-full h-auto overflow-visible"
+                >
+                  <defs>
+                    <linearGradient
+                      id="hero-sun"
+                      x1="0"
+                      x2="1"
+                      y1="0"
+                      y2="1"
+                    >
+                      <stop offset="0" stopColor="var(--sun-start)" />
+                      <stop offset="1" stopColor="var(--sun-end)" />
+                    </linearGradient>
+                    <radialGradient
+                      id="hero-halo"
+                      cx="50%"
+                      cy="50%"
+                      r="50%"
+                    >
+                      <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+                    </radialGradient>
+                  </defs>
+
+                  {/* Breathing Sun / Core Lens */}
+                  <circle
+                    cx="377"
+                    cy="205"
+                    r="190"
+                    fill="url(#hero-halo)"
+                    className="sun-pulse"
+                  />
+                  <circle
+                    className="sun-pulse"
+                    cx="377"
+                    cy="205"
+                    r="135"
+                    fill="url(#hero-sun)"
+                    opacity="0.85"
+                  />
+
+                  {/* Orbits / Optical Rings */}
+                  <g
+                    fill="none"
+                    stroke="var(--ink)"
+                    strokeWidth="1.2"
+                    opacity="0.45"
+                  >
+                    <circle cx="377" cy="205" r="175" />
+                    <circle cx="377" cy="205" r="230" strokeDasharray="3 6" />
+                    <path d="M110 490 C 190 390, 260 330, 377 205 S 520 80, 580 40" />
+                    <path d="M60 540 C 130 470, 200 430, 310 415 C 400 400, 480 430, 560 370" />
+                    <path d="M377 205 C 330 330, 360 430, 480 515" />
+                  </g>
+
+                  {/* Alignment Crosshairs & Calibration Nodes */}
+                  <g fill="var(--paper)" stroke="var(--ink)" strokeWidth="1.6">
+                    <circle cx="110" cy="490" r="6" />
+                    <circle cx="310" cy="415" r="6" />
+                    <circle cx="480" cy="515" r="7" fill="var(--accent)" />
+                    <circle cx="560" cy="370" r="5" />
+                    <circle cx="580" cy="40" r="6" />
+                    <circle cx="377" cy="205" r="4" fill="var(--ink)" />
+                  </g>
+
+                  {/* Reticle Axes */}
+                  <path
+                    d="M 377 155 L 377 255 M 327 205 L 427 205"
+                    stroke="var(--ink)"
+                    strokeWidth="1"
+                    opacity="0.6"
+                  />
+
+                  {/* Coordinates & Metadata */}
+                  <g
+                    fill="var(--ink-soft)"
+                    fontFamily="'DM Mono', monospace"
+                    fontSize="10px"
+                    letterSpacing="0.14em"
+                  >
+                    <text x="24" y="555">25.2048° N</text>
+                    <text x="24" y="573">55.2708° E · DUAL FRAME</text>
+                    <text x="360" y="32">OPTICAL DELTA ENGINE · RANSAC</text>
+                  </g>
+                </svg>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-8 flex justify-between items-center text-[11px] text-[var(--ink-soft)] mono">
+            <span>CALIBRATION: SENSOR HOMOGRAPHY · SSIM GAUSSIAN</span>
+            <span className="hidden sm:inline">
+              Designing for pixel-level precision, spatial coherence, and useful surprise.
+            </span>
           </div>
         </section>
 
-        <section id="workspace" className="grid scroll-mt-24 gap-8 py-10 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-10 lg:py-14">
-          <aside className="min-w-0 space-y-7">
+        {/* ─── MARQUEE / FIELD NOTES ────────────────────────────── */}
+        <div className="field-notes" aria-hidden="true">
+          <div className="field-notes__track">
+            <span>TEMPORAL CHANGE DETECTION</span>
+            <i>✦</i>
+            <span>STRUCTURAL SIMILARITY (SSIM)</span>
+            <i>✦</i>
+            <span>ORB FEATURE HOMOGRAPHY</span>
+            <i>✦</i>
+            <span>RADIOMETRIC NORMALISATION</span>
+            <i>✦</i>
+            <span>HYBRID DELTA FUSION</span>
+            <i>✦</i>
+            <span>OTSU THRESHOLDING</span>
+            <i>✦</i>
+            <span>SPATIAL REGION EXTRACTION</span>
+            <i>✦</i>
+            <span>TEMPORAL CHANGE DETECTION</span>
+            <i>✦</i>
+            <span>STRUCTURAL SIMILARITY (SSIM)</span>
+            <i>✦</i>
+            <span>ORB FEATURE HOMOGRAPHY</span>
+            <i>✦</i>
+            <span>RADIOMETRIC NORMALISATION</span>
+            <i>✦</i>
+            <span>HYBRID DELTA FUSION</span>
+            <i>✦</i>
+            <span>OTSU THRESHOLDING</span>
+            <i>✦</i>
+            <span>SPATIAL REGION EXTRACTION</span>
+            <i>✦</i>
+          </div>
+        </div>
+
+        {/* ─── WORKSPACE SECTION ────────────────────────────────── */}
+        <section id="workspace" className="shell scroll-mt-24 py-14 lg:py-20">
+          <div className="mb-12 grid gap-6 md:grid-cols-[0.5fr_1fr_0.6fr] md:items-start border-b border-[var(--line)] pb-10">
             <div>
-              <SectionLabel number="01">Source imagery</SectionLabel>
-              <p className="mb-4 text-xs leading-5 text-[#77786e]">Add two images of the same scene, captured at different times.</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="atlas-dropzone">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.13em]">Image A</span>
-                    <span className="rounded-full bg-[#edf0ff] px-2 py-0.5 text-[9px] text-[#5e5a83]">EARLIER</span>
-                  </div>
-                  <ImageDropzone label="Image A" hint="Earlier time" file={fileA} previewUrl={urlA} onFile={handleFile(setFileA)} />
-                </div>
-                <div className="atlas-dropzone">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.13em]">Image B</span>
-                    <span className="rounded-full bg-[#edf0ff] px-2 py-0.5 text-[9px] text-[#5e5a83]">LATER</span>
-                  </div>
-                  <ImageDropzone label="Image B" hint="Later time" file={fileB} previewUrl={urlB} onFile={handleFile(setFileB)} />
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-2 text-[10px] text-[#8a8b80]">
-                <span className="font-mono">JPG · PNG · WEBP</span>
-                <span className="h-1 w-1 rounded-full bg-[#c9c5df]" />
-                <span>Images stay in your workflow</span>
+              <p className="section-number">02 / WORKSPACE</p>
+            </div>
+            <div>
+              <h2 className="font-editorial text-4xl sm:text-5xl leading-tight">
+                From two moments<br />
+                <em>to a clear signal.</em>
+              </h2>
+            </div>
+            <div className="text-xs leading-relaxed text-[var(--ink-soft)]">
+              <p>
+                Provide reference and comparison frames. Align geometry, account for
+                atmospheric variations, and measure the pixel delta.
+              </p>
+              <div className="mt-3">
+                <a href="#presets" className="text-link">
+                  View profiles <span>↘</span>
+                </a>
               </div>
             </div>
+          </div>
 
-            <div className="atlas-panel rounded-[1.5rem] p-5 sm:p-6">
-              <SectionLabel number="02">Detection settings</SectionLabel>
-              <ControlsPanel params={params} activePreset={activePreset} disabled={loading}
-                onPreset={applyPreset} onChange={patchParams} />
-            </div>
-
-            <div className="space-y-3">
-
-              <button
-                type="button"
-                onClick={runCurrent}
-                disabled={!ready || loading}
-                className="
-    group relative flex w-full items-center justify-between
-    rounded-2xl border-2 border-[#8da2ff]
-    bg-[#e9edff] px-5 py-3.5
-    text-sm font-semibold text-[#29449c]
-    shadow-[0_5px_0_#aebfff,0_7px_14px_rgba(91,111,220,0.10)]
-    transition-[transform,box-shadow,background-color]
-    duration-150 ease-out
-    hover:bg-[#e0e7ff]
-    active:translate-y-[3px]
-    active:shadow-[0_2px_0_#aebfff,0_3px_8px_rgba(91,111,220,0.10)]
-    focus-visible:outline-2
-    focus-visible:outline-offset-4
-    focus-visible:outline-[#7565d8]
-    disabled:cursor-not-allowed
-    disabled:opacity-75
-    disabled:hover:bg-[#e9edff]
-    disabled:active:translate-y-0
-    disabled:active:shadow-[0_5px_0_#aebfff,0_7px_14px_rgba(91,111,220,0.10)]
-  "
-              >
-                <span>
-                  {loading ? "Analysing imagery…" : "Analyse current settings"}
-                </span>
-
-                <span
-                  aria-hidden="true"
-                  className="
-      flex h-8 w-8 items-center justify-center
-      rounded-xl border border-[#c4ceff]
-      bg-[#dbe3ff] text-[#29449c]
-      transition-transform duration-150
-      group-active:translate-y-0.5
-    "
-                >
-                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
-                    <path
-                      d="M5 12h14m-6-6 6 6-6 6"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={runAll}
-                disabled={!ready || loading}
-                className="
-    group relative flex w-full items-center justify-between
-    rounded-2xl border-2 border-[#8da2ff]
-    bg-[#e9edff] px-5 py-3.5
-    text-sm font-semibold text-[#29449c]
-    shadow-[0_5px_0_#aebfff,0_7px_14px_rgba(91,111,220,0.10)]
-    transition-[transform,box-shadow,background-color]
-    duration-150 ease-out
-    hover:bg-[#e0e7ff]
-    active:translate-y-[3px]
-    active:shadow-[0_2px_0_#aebfff,0_3px_8px_rgba(91,111,220,0.10)]
-    focus-visible:outline-2
-    focus-visible:outline-offset-4
-    focus-visible:outline-[#7565d8]
-    disabled:cursor-not-allowed
-    disabled:opacity-75
-    disabled:hover:bg-[#e9edff]
-    disabled:active:translate-y-0
-    disabled:active:shadow-[0_5px_0_#aebfff,0_7px_14px_rgba(91,111,220,0.10)]
-  "
-              >
-                <span>Compare all 4 methods</span>
-
-                <span
-                  className="
-      rounded-lg border border-[#c4ceff]
-      bg-[#dbe3ff] px-2.5 py-1
-      font-mono text-[11px] font-semibold text-[#4058ad]
-    "
-                >
-                  01—04
-                </span>
-              </button>
-              {!ready && <p className="px-2 text-center text-[10px] text-[#8a8b80]">Upload both images to begin analysis.</p>}
-            </div>
-          </aside>
-
-          <section className="min-w-0">
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+          <div className="grid gap-10 lg:grid-cols-[360px_minmax(0,1fr)] lg:gap-12">
+            {/* ─── LEFT ASIDE: CONTROLS & INPUTS ─────────────────── */}
+            <aside className="min-w-0 space-y-8">
+              {/* Image Inputs */}
               <div>
-                <SectionLabel number="03">Analysis workspace</SectionLabel>
-                <h2 className="text-2xl font-semibold tracking-[-0.06em] sm:text-3xl">The change report<span className="text-[#7565d8]">.</span></h2>
-                <p className="mt-2 text-xs text-[#77786e]">Visual comparison, quantitative metrics, and exportable findings.</p>
-              </div>
-              <div className="flex items-center gap-2 rounded-full border border-[#dfe0d4] bg-white/70 px-3 py-2 text-[10px] text-[#77786e]">
-                <span className={`h-1.5 w-1.5 rounded-full ${result ? "bg-[#8574e8]" : loading ? "animate-pulse bg-[#c19d44]" : "bg-[#c7c5d5]"}`} />
-                {loading ? "PROCESSING" : result ? "RESULTS READY" : "AWAITING INPUT"}
-              </div>
-            </div>
+                <SectionLabel number="01">Source Imagery</SectionLabel>
+                <p className="mb-4 text-xs leading-relaxed text-[var(--ink-soft)]">
+                  Upload two photographs of the same scene captured at different
+                  points in time.
+                </p>
 
-            {error && (
-              <div role="alert" className="mb-5 rounded-2xl border border-[#e5b6aa] bg-[#fff1ec] px-4 py-3 text-sm text-[#9c4334]">
-                <span className="mr-2 font-semibold">Analysis error</span>{error}
-              </div>
-            )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="mono font-semibold text-[var(--ink)]">
+                        Frame A
+                      </span>
+                      <span className="mono rounded border border-[var(--line)] bg-[var(--paper-deep)] px-1.5 py-0.5 text-[9px] text-[var(--ink-soft)]">
+                        EARLIER
+                      </span>
+                    </div>
+                    <ImageDropzone
+                      label="Image A"
+                      hint="Earlier moment"
+                      file={fileA}
+                      previewUrl={urlA}
+                      onFile={handleFile(setFileA)}
+                    />
+                  </div>
 
-            {!result ? (
-              <div className="atlas-empty-state flex min-h-[430px] flex-col items-center justify-center overflow-hidden rounded-[1.75rem] border border-[#e9e8f2] px-6 py-12 text-center">
-                <div className="relative mb-8 flex h-32 w-48 items-center justify-center">
-                  <div className="absolute left-0 top-4 h-24 w-24 -rotate-6 rounded-2xl border border-[#c9cdb9] bg-[#f0eeff] p-2">
-                    <div className="flex h-full items-end rounded-lg bg-[#e5e1ff] p-2">
-                      <span className="h-7 w-7 rounded-full bg-[#c7bcff]" />
-                      <span className="ml-1 h-12 w-10 rounded-t-full bg-[#a99aff]" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="mono font-semibold text-[var(--ink)]">
+                        Frame B
+                      </span>
+                      <span className="mono rounded border border-[var(--line)] bg-[var(--paper-deep)] px-1.5 py-0.5 text-[9px] text-[var(--ink-soft)]">
+                        LATER
+                      </span>
                     </div>
-                  </div>
-                  <div className="absolute right-0 top-4 h-24 w-24 rotate-6 rounded-2xl border border-[#c9cdb9] bg-white p-2 shadow-sm">
-                    <div className="relative flex h-full items-end rounded-lg bg-[#f3f1ff] p-2">
-                      <span className="h-6 w-7 rounded-full bg-[#c7bcff]" />
-                      <span className="ml-1 h-10 w-10 rounded-t-full bg-[#a99aff]" />
-                      <span className="absolute right-2 top-2 h-3 w-3 rounded-full border-2 border-[#8574e8]" />
-                    </div>
-                  </div>
-                  <span className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[#dfe0d4] bg-[#faf9ff] text-sm text-[#77786e]">↔</span>
-                </div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8a8b80]">Ready when you are</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-[-0.06em]">Two moments. One clearer picture.</h3>
-                <p className="mt-3 max-w-md text-sm leading-6 text-[#77786e]">Upload your earlier and later images, choose a detection method, and let ATLAS map where the scene changed.</p>
-                <a href="#workspace" className="mt-6 rounded-full border border-[#dedaf5] bg-white px-4 py-2.5 text-xs font-semibold transition hover:border-[#9cae50]">Add source images <span className="ml-2">↑</span></a>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <MetricCards result={result} />
-
-                <div className="atlas-panel rounded-[1.5rem] p-4 sm:p-5">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#77786e]">Visual inspection</p>
-                      <p className="mt-1 text-sm font-semibold">Compare views</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {([
-                        ["Left", leftView, setLeftView],
-                        ["Right", rightView, setRightView],
-                      ] as const).map(([label, value, setter]) => (
-                        <label key={label} className="flex items-center gap-2 rounded-full border border-[#e9e8f2] bg-white px-3 py-2 text-[10px] text-[#77786e]">
-                          {label}
-                          <select value={value} onChange={(e) => setter(e.target.value as ViewKey)}
-                            className="max-w-36 bg-transparent text-xs font-medium text-[#20211b] outline-none">
-                            {(Object.keys(VIEW_LABELS) as ViewKey[]).map((v) => (
-                              <option key={v} value={v}>{VIEW_LABELS[v]}</option>
-                            ))}
-                          </select>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <CompareSlider left={sourceFor(leftView)} right={sourceFor(rightView)}
-                    leftLabel={VIEW_LABELS[leftView]} rightLabel={VIEW_LABELS[rightView]}
-                    width={result.width} height={result.height} />
-                  <div className="mt-4 flex flex-wrap gap-2 border-t border-[#e5e5dc] pt-4">
-                    <a href={result.images.overlay} download="atlas-overlay.jpg"
-                      className="rounded-full bg-[#20211b] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#39315e]">
-                      Download overlay <span className="ml-1">↓</span>
-                    </a>
-                    <button type="button" onClick={downloadJson}
-                      className="rounded-full border border-[#e2e0ef] bg-white px-4 py-2.5 text-xs font-semibold transition hover:border-[#a99aff]">
-                      Export results JSON <span className="ml-1">↓</span>
-                    </button>
+                    <ImageDropzone
+                      label="Image B"
+                      hint="Later moment"
+                      file={fileB}
+                      previewUrl={urlB}
+                      onFile={handleFile(setFileB)}
+                    />
                   </div>
                 </div>
 
-                <div className="atlas-panel rounded-[1.5rem] p-4 sm:p-5">
-                  <div className="mb-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#77786e]">Method evaluation</p>
-                    <p className="mt-1 text-sm font-semibold">Compare algorithm results</p>
-                  </div>
-                  <ComparisonTable results={results} activeKey={activeKey} onSelect={setActiveKey} />
+                <div className="mt-3 flex items-center gap-2 font-mono text-[10px] text-[var(--ink-soft)]">
+                  <span>JPG · PNG · WEBP</span>
+                  <span>✦</span>
+                  <span>LOCAL ANALYSIS BUFFER</span>
                 </div>
               </div>
-            )}
-          </section>
+
+              {/* Controls Panel */}
+              <div id="presets" className="editorial-card rounded-2xl p-5 sm:p-6">
+                <ControlsPanel
+                  params={params}
+                  activePreset={activePreset}
+                  disabled={loading}
+                  onPreset={applyPreset}
+                  onChange={patchParams}
+                />
+              </div>
+
+              {/* Action Trigger Buttons */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={runCurrent}
+                  disabled={!ready || loading}
+                  className={`group relative flex w-full items-center justify-between rounded-xl border px-5 py-4 text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
+                    !ready
+                      ? "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--ink-soft)] cursor-not-allowed opacity-80"
+                      : loading
+                        ? "border-[var(--accent)] bg-[var(--accent)] text-white cursor-wait opacity-90 shadow-sm"
+                        : "border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm hover:bg-[var(--accent-hover)] active:translate-y-0.5 cursor-pointer"
+                  }`}
+                >
+                  <span className="font-mono text-[11px] tracking-wider">
+                    {loading ? "Analysing imagery…" : "Analyse current profile"}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-7 w-7 items-center justify-center rounded-full font-mono text-sm transition-transform duration-200 ${
+                      !ready
+                        ? "border border-[var(--line)] bg-[var(--paper-deep)] text-[var(--ink-soft)]"
+                        : "border border-white/30 bg-white/20 text-white group-hover:translate-x-1"
+                    }`}
+                  >
+                    {loading ? (
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ) : (
+                      "→"
+                    )}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={runAll}
+                  disabled={!ready || loading}
+                  className={`group flex w-full items-center justify-between rounded-xl border px-5 py-3.5 text-xs font-medium uppercase tracking-wider transition-all duration-200 ${
+                    !ready
+                      ? "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--ink-soft)] cursor-not-allowed opacity-80"
+                      : "border-[var(--line-strong)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] active:translate-y-0.5 cursor-pointer"
+                  }`}
+                >
+                  <span className="font-mono text-[11px] tracking-wider">
+                    Compare all 4 methods
+                  </span>
+                  <span
+                    className={`mono rounded border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                      !ready
+                        ? "border-[var(--line)] bg-[var(--paper-deep)] text-[var(--ink-soft)]"
+                        : "border-[var(--line-strong)] bg-[var(--paper-deep)] text-[var(--accent)] group-hover:border-[var(--accent)]"
+                    }`}
+                  >
+                    01—04
+                  </span>
+                </button>
+
+                {!ready && (
+                  <p className="px-2 text-center font-mono text-[10px] text-[var(--ink-soft)]">
+                    Upload earlier and later frames to begin inspection.
+                  </p>
+                )}
+              </div>
+            </aside>
+
+            {/* ─── RIGHT CANVAS: INSPECTION & RESULTS ─────────────── */}
+            <section className="min-w-0">
+              <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--line)] pb-4">
+                <div>
+                  <SectionLabel number="03">Change Report</SectionLabel>
+                  <h2 className="font-editorial text-3xl sm:text-4xl">
+                    Inspection Canvas
+                    <span className="text-[var(--accent)] italic">.</span>
+                  </h2>
+                  <p className="mt-1 text-xs text-[var(--ink-soft)]">
+                    Visual comparison, quantified surface metrics, and exportable findings.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-3 py-1.5 font-mono text-[10px] text-[var(--ink-soft)]">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      result
+                        ? "bg-[var(--accent)]"
+                        : loading
+                          ? "animate-ping bg-[var(--gold)]"
+                          : "bg-[var(--ink-soft)]/50"
+                    }`}
+                  />
+                  {loading
+                    ? "COMPUTING DELTA"
+                    : result
+                      ? "ANALYSIS READY"
+                      : "AWAITING INPUT"}
+                </div>
+              </div>
+
+              {/* Error Callout */}
+              {error && (
+                <div
+                  role="alert"
+                  className="mb-6 rounded-xl border border-[#bc682f] bg-[#f7ebe4] p-4 text-xs text-[#823315] dark:bg-[#25150f] dark:text-[#f2a585]"
+                >
+                  <span className="font-mono font-bold uppercase tracking-wider mr-2">
+                    Analysis fault:
+                  </span>
+                  {error}
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!result ? (
+                <div className="editorial-card flex min-h-[460px] flex-col items-center justify-center rounded-2xl p-8 sm:p-12 text-center">
+                  <div className="relative mb-8 flex h-36 w-52 items-center justify-center">
+                    <div className="absolute left-2 top-4 h-28 w-28 -rotate-6 rounded-xl border border-[var(--line-strong)] bg-[var(--paper-deep)] p-2 shadow-sm transition-transform duration-300 hover:rotate-0">
+                      <div className="flex h-full items-end justify-center rounded bg-[var(--surface)] p-2">
+                        <span className="h-8 w-8 rounded-full border border-[var(--line)] bg-[var(--accent)]/30" />
+                        <span className="ml-1 h-14 w-12 rounded-t-lg bg-[var(--ink)]/40" />
+                      </div>
+                    </div>
+                    <div className="absolute right-2 top-4 h-28 w-28 rotate-6 rounded-xl border border-[var(--line-strong)] bg-[var(--paper)] p-2 shadow-md transition-transform duration-300 hover:rotate-0">
+                      <div className="relative flex h-full items-end justify-center rounded bg-[var(--surface-hover)] p-2">
+                        <span className="h-8 w-8 rounded-full border border-[var(--line)] bg-[var(--gold)]/30" />
+                        <span className="ml-1 h-12 w-12 rounded-t-lg bg-[var(--ink)]/60" />
+                        <span className="absolute right-2 top-2 h-3.5 w-3.5 rounded-full border border-[var(--accent)] bg-[var(--accent)]/40 animate-ping" />
+                      </div>
+                    </div>
+                    <span className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--line-strong)] bg-[var(--paper)] font-mono text-xs text-[var(--ink)] shadow-md">
+                      Δ
+                    </span>
+                  </div>
+
+                  <p className="mono text-[var(--accent)]">
+                    Calibrated &amp; Ready
+                  </p>
+                  <h3 className="mt-2.5 font-editorial text-2xl sm:text-3xl text-[var(--ink)]">
+                    Two moments. One clearer picture.
+                  </h3>
+                  <p className="mt-3 max-w-md text-xs leading-relaxed text-[var(--ink-soft)]">
+                    Upload your earlier and later scene captures on the left, choose a
+                    mathematical profile, and let ATLAS pinpoint where the scene evolved.
+                  </p>
+                  <a
+                    href="#workspace"
+                    className="mt-6 inline-flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 font-mono text-[11px] text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)]"
+                  >
+                    <span>Load source images</span>
+                    <span>↑</span>
+                  </a>
+                </div>
+              ) : (
+                /* Results View */
+                <div className="space-y-8">
+                  {/* Metric Cards */}
+                  <MetricCards result={result} />
+
+                  {/* Visual Inspection Container */}
+                  <div className="editorial-card rounded-2xl p-5 sm:p-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] pb-3">
+                      <div>
+                        <p className="mono text-[var(--accent)]">
+                          Visual inspection
+                        </p>
+                        <p className="font-editorial text-xl text-[var(--ink)]">
+                          Spectral comparison view
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2.5">
+                        {(
+                          [
+                            ["Left frame", leftView, setLeftView],
+                            ["Right frame", rightView, setRightView],
+                          ] as const
+                        ).map(([label, value, setter]) => (
+                          <label
+                            key={label}
+                            className="flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-1.5 font-mono text-[11px] text-[var(--ink-soft)]"
+                          >
+                            <span>{label}:</span>
+                            <select
+                              value={value}
+                              onChange={(e) => setter(e.target.value as ViewKey)}
+                              className="editorial-select bg-transparent text-xs font-semibold text-[var(--ink)] outline-none cursor-pointer"
+                            >
+                              {(Object.keys(VIEW_LABELS) as ViewKey[]).map((v) => (
+                                <option key={v} value={v}>
+                                  {VIEW_LABELS[v]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Interactive Comparison Slider */}
+                    <CompareSlider
+                      left={sourceFor(leftView)}
+                      right={sourceFor(rightView)}
+                      leftLabel={VIEW_LABELS[leftView]}
+                      rightLabel={VIEW_LABELS[rightView]}
+                      width={result.width}
+                      height={result.height}
+                    />
+
+                    {/* Export and Download Actions */}
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] pt-4">
+                      <div className="flex flex-wrap gap-2.5">
+                        <a
+                          href={result.images.overlay}
+                          download="atlas-overlay.jpg"
+                          className="inline-flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--ink)] px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-[var(--paper)] transition hover:bg-[var(--accent)] hover:border-[var(--accent)]"
+                        >
+                          <span>Download overlay map</span>
+                          <span>↓</span>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={downloadJson}
+                          className="inline-flex items-center gap-2 rounded-full border border-[var(--line-strong)] bg-[var(--surface)] px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-[var(--ink)] transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)]"
+                        >
+                          <span>Export results JSON</span>
+                          <span>↓</span>
+                        </button>
+                      </div>
+
+                      <span className="mono text-[10px] text-[var(--ink-soft)]">
+                        RESOLUTION: {result.width} × {result.height} PX
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Multiple Runs Comparison Table */}
+                  <div className="editorial-card rounded-2xl p-5 sm:p-6">
+                    <div className="mb-4">
+                      <p className="mono text-[var(--accent)]">
+                        Multi-run evaluation
+                      </p>
+                      <p className="font-editorial text-xl text-[var(--ink)]">
+                        Algorithm cross-comparison
+                      </p>
+                    </div>
+                    <ComparisonTable
+                      results={results}
+                      activeKey={activeKey}
+                      onSelect={setActiveKey}
+                    />
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
         </section>
 
-        <section id="method" className="grid gap-6 border-t border-[#e9e8f2] py-8 sm:grid-cols-3 sm:py-10">
-          {[
-            ["01 / ALIGN", "Handle camera movement", "Feature matching estimates a geometric transform so both images line up before comparison."],
-            ["02 / COMPARE", "Use complementary signals", "Pixel difference, SSIM structural dissimilarity, and hybrid scoring reveal different kinds of change."],
-            ["03 / LOCALIZE", "Make changes inspectable", "Spatial filtering helps turn raw differences into regions you can inspect, measure, and export."],
-          ].map(([eyebrow, title, copy]) => (
-            <div key={eyebrow} className="border-t border-[#e2e0ef] pt-4">
-              <p className="font-mono text-[10px] tracking-[0.14em] text-[#7565d8]">{eyebrow}</p>
-              <h3 className="mt-3 text-lg font-semibold tracking-[-0.04em]">{title}</h3>
-              <p className="mt-2 max-w-sm text-xs leading-6 text-[#77786e]">{copy}</p>
+        {/* ─── METHODOLOGY SECTION ──────────────────────────────── */}
+        <section
+          id="method"
+          className="shell border-t border-[var(--line)] py-16 lg:py-24"
+          aria-labelledby="method-title"
+        >
+          <div className="mb-12 grid gap-6 md:grid-cols-[0.5fr_1fr_0.6fr] md:items-start">
+            <div>
+              <p className="section-number">04 / METHODOLOGY</p>
             </div>
-          ))}
-        </section>
+            <div>
+              <h2
+                id="method-title"
+                className="font-editorial text-4xl sm:text-5xl leading-tight"
+              >
+                Principles of<br />
+                <em>temporal difference.</em>
+              </h2>
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--ink-soft)]">
+              How ATLAS transforms raw raster pixels into actionable, calibrated
+              change maps with zero hallucination.
+            </p>
+          </div>
 
-        <footer className="flex flex-col justify-between gap-3 border-t border-[#e9e8f2] py-6 text-[10px] text-[#8a8b80] sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2"><Mark className="h-7 w-7 rounded-lg" /><span className="font-semibold tracking-wide text-[#55564e]">ATLAS / TEMPORAL CHANGE INTELLIGENCE</span></div>
-          <span>Designed for careful comparison, not guesswork.</span>
-        </footer>
+          <div className="grid gap-6 md:grid-cols-3">
+            {[
+              {
+                step: "01 / ALIGN",
+                title: "Homography Registration",
+                copy: "Feature matching using ORB keypoints and RANSAC homography corrects camera shifts, tilt, and optical rotation before any mathematical subtraction.",
+              },
+              {
+                step: "02 / COMPARE",
+                title: "Dual Signal Formulation",
+                copy: "Absolute pixel intensity captures high-frequency edges, while structural similarity (SSIM) maps perceptual luminance and contrast alterations.",
+              },
+              {
+                step: "03 / LOCALIZE",
+                title: "Morphological Filtering",
+                copy: "Otsu thresholding segments the fused gradient, followed by spatial dilation and erosion to isolate contiguous change clusters from sensor noise.",
+              },
+            ].map((col) => (
+              <div
+                key={col.step}
+                className="editorial-card rounded-xl p-6 transition-all duration-200"
+              >
+                <p className="mono text-[var(--accent)] font-semibold">
+                  {col.step}
+                </p>
+                <h3 className="mt-3 font-editorial text-2xl text-[var(--ink)]">
+                  {col.title}
+                </h3>
+                <p className="mt-3 text-xs leading-relaxed text-[var(--ink-soft)]">
+                  {col.copy}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
+
+      {/* ─── SITE FOOTER ────────────────────────────────────────── */}
+      <footer className="border-t border-[var(--line)] bg-[var(--paper)] py-10 transition-colors">
+        <div className="shell flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between text-xs text-[var(--ink-soft)]">
+          <div className="flex items-center gap-3">
+            <MonogramMark />
+            <div>
+              <span className="font-editorial text-base font-semibold text-[var(--ink)]">
+                ATLAS
+              </span>
+              <span className="mono block text-[9px] text-[var(--ink-soft)]">
+                Temporal Change Intelligence
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-5 font-mono text-[11px]">
+            <a
+              href="#top"
+              className="hover:text-[var(--ink)] hover:underline"
+            >
+              Top ↑
+            </a>
+            <a
+              href="#workspace"
+              className="hover:text-[var(--ink)] hover:underline"
+            >
+              Workspace
+            </a>
+            <a
+              href="#method"
+              className="hover:text-[var(--ink)] hover:underline"
+            >
+              Methodology
+            </a>
+            <a
+              href="http://127.0.0.1:8000/docs"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-[var(--ink)] hover:underline"
+            >
+              API Docs ↗
+            </a>
+          </div>
+
+          <div className="mono text-[10px] text-[var(--ink-soft)] sm:text-right">
+            <span>25.2048° N · 55.2708° E</span>
+            <span className="block mt-0.5 text-[9px] opacity-75">
+              Calibrated for clarity, precision, and useful surprise.
+            </span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
